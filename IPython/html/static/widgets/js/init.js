@@ -19,4 +19,5 @@ define([
     "widgets/js/widget_selection",
     "widgets/js/widget_selectioncontainer",
     "widgets/js/widget_string",
+    "widgets/js/widget_matplotlib",
 ], function(){ return true; });
