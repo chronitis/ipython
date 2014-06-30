@@ -1,7 +1,7 @@
 """Matplotlib-related widgets"""
 
 from .widget import DOMWidget
-from IPython.utils.traitlets import Unicode, Enum, Dict, Bool
+from IPython.utils.traitlets import Unicode, Enum, Dict, Bool, List, Any
 from collections import OrderedDict
 from matplotlib.markers import MarkerStyle
 from matplotlib.lines import Line2D
@@ -23,12 +23,12 @@ def _marker_to_svg(m, size=16, linewidth=2, color=(0,0,0)):
     rend.finalize()
     return store.getvalue()
 
-_MARKER_SVG = {unicode_type(m): _marker_to_svg(m) for m in MarkerStyle.markers}
+_MARKER_CODES = MarkerStyle.markers.keys()
+_MARKER_SVG = {m: _marker_to_svg(m) for m in _MARKER_CODES}
 MARKER_SVG = lambda x: _MARKER_SVG[x] if x in _MARKER_SVG else _marker_to_svg(x)
 
-def _linestyle_to_svg(ls, size=64, linewidth=2, color=(0,0,0)):
-    width = size
-    height = size/4
+def _linestyle_to_svg(ls, width=64, height=None, linewidth=2, color=(0,0,0)):
+    if height is None: height = width/8
     l = Line2D((width/8, 7*width/8), (height/2, height/2),
                color=color, linewidth=linewidth, linestyle=ls)
     store = StringIO()
@@ -37,12 +37,12 @@ def _linestyle_to_svg(ls, size=64, linewidth=2, color=(0,0,0)):
     rend.finalize()
     return store.getvalue()
 
-_LINE_SVG = {unicode_type(l): _linestyle_to_svg(l) for l in Line2D.lineStyles}
+_LINE_CODES = Line2D.lineStyles.keys()
+_LINE_SVG = {l: _linestyle_to_svg(l) for l in _LINE_CODES}
 LINE_SVG = lambda x: _LINE_SVG[x] if x in _LINE_SVG else _linestyle_to_svg(x)
 
-def _cmap_to_svg(name, size=512):
-    width=size
-    height=size/32
+def _cmap_to_svg(name, width=256, height=None):
+    if height is None: height = width/32
 
     rawdata = matplotlib.cm.datad[name]
     colormap = matplotlib.cm.cmap_d[name]
@@ -61,7 +61,8 @@ def _cmap_to_svg(name, size=512):
 
     store = StringIO()
     writer = XMLWriter(store)
-    writer.start("svg", width='%ipt' % width, height='%ipt' % height)
+    writer.start("svg", width='%ipt' % width, height='%ipt' % height,
+                 version='1.1', viewBox="0 0 %i %i" % (width, height))
     writer.start("defs")
     writer.start("linearGradient", id="cmap_%s" % name, x1="0%", y1="0%", x2="100%", y2="0%")
     for i, pos in enumerate(xpos):
@@ -78,16 +79,40 @@ def _cmap_to_svg(name, size=512):
     writer.end() #svg
     return store.getvalue()
 
-_CMAP_SVG = {unicode_type(c): _cmap_to_svg(c) for c in matplotlib.cm.datad}
+# from http://matplotlib.org/examples/color/colormaps_reference.html
+_CLASS_CMAP = {
+    'Sequential': ('binary', 'Blues', 'BuGn', 'BuPu', 'gist_yarg', 'GnBu',
+                   'Greens', 'Greys', 'Oranges', 'OrRd', 'PuBu', 'PuBuGn',
+                   'PuRd', 'Purples', 'RdPu', 'Reds', 'YlGn', 'YlGnBu',
+                   'YlOrBr', 'YlOrRd', 'afmhot', 'autumn', 'bone', 'cool',
+                   'copper', 'gist_gray', 'gist_heat', 'gray', 'hot', 'pink',
+                   'spring', 'summer', 'winter'),
+    'Diverging':  ('BrBG', 'bwr', 'coolwarm', 'PiYG', 'PRGn', 'PuOr', 'RdBu',
+                   'RdGy', 'RdYlBu', 'RdYlGn', 'seismic'),
+    'Qualitative':('Accent', 'Dark2', 'hsv', 'Paired', 'Pastel1', 'Pastel2',
+                   'Set1', 'Set2', 'Set3', 'Spectral', 'spectral',
+                   'nipy_spectral'),
+    'Other':      ('gist_earth', 'gist_ncar', 'gist_rainbow', 'gist_stern',
+                   'jet', 'brg', 'CMRmap', 'cubehelix', 'gnuplot', 'gnuplot2',
+                   'ocean', 'rainbow', 'terrain', 'flag', 'prism')}
+
+
+
+_CMAP_CODES = [c for c in matplotlib.cm.datad.keys() if not c.endswith("_r")]
+_CMAP_SVG = {unicode_type(c): _cmap_to_svg(c) for c in _CMAP_CODES}
 CMAP_SVG = lambda x: _CMAP_SVG[x] if x in _CMAP_SVG else _cmap_to_svg(x)
-DEFAULT = {"marker": ".", "line": "-", "cmap": "Accent"}
+_CMAP_REVERSED = {k: k.endswith("_r") for k in _CMAP_CODES}
+_CMAP_CLASS = {vv: k for k, v in _CLASS_CMAP.items() for vv in v}
+#print("unannotated cmaps", set(_CMAP_CODES) - set(_CMAP_CLASS.keys()))
+DEFAULT = {"marker": ".", "line": "-", "cmap": "YlGnBu"}
 
 class MPLSelectionWidget(DOMWidget):
     _view_name = Unicode('MPLDropdownView', sync=True)
     mpl_type = Enum([u'marker', u'line', u'cmap'], u'marker',
         help="MPL widget type", sync=True)
     value = Unicode(help="Selected value", sync=True)
-    values = Dict(help="Dictionary of SVG representations of each possible value", sync=True)
+    codes = List(Any, sync=True)
+    svg = List(Unicode, sync=True)
     disabled = Bool(False, help="Enable or disable user changes", sync=True)
     description = Unicode(help="Description of the value this widget represents", sync=True)
 
@@ -97,16 +122,14 @@ class MPLSelectionWidget(DOMWidget):
         get_svg = {'marker': MARKER_SVG,
                    'line': LINE_SVG,
                    'cmap': CMAP_SVG}[self.mpl_type]
-        if 'values' in kwargs:
-            values = kwargs.pop('values')
-            if isinstance(values, list):
-                self.values = OrderedDict((unicode_type(v), unicode_type(get_svg(v))) for v in values)
-            elif isinstance(values, dict):
-                self.values = OrderedDict((unicode_type(k), unicode_type(v)) for k, v in values.items())
+        if 'codes' in kwargs:
+            self.codes = list(kwargs.pop('codes'))
+
         else:
-            self.values = {'marker': _MARKER_SVG,
-                           'line': _LINE_SVG,
-                           'cmap': _CMAP_SVG}[self.mpl_type]
+            self.codes = {'marker': _MARKER_CODES,
+                          'line': _LINE_CODES,
+                          'cmap': _CMAP_CODES}[self.mpl_type]
+        self.svg = [unicode_type(get_svg(c)) for c in self.codes]
         if 'value' not in kwargs:
             self.value = DEFAULT[self.mpl_type]
         DOMWidget.__init__(self, *args, **kwargs)

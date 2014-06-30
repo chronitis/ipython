@@ -42,18 +42,22 @@ define(["widgets/js/widget"], function(WidgetManager) {
 
             if (options === undefined || options.updated_view != this) {
                 var selected_item = this.model.get('value');
-                var items = this.model.get('values');
-                this.$droplabel.html(items[selected_item]); //.html(""+ selected_item + items[selected_item]);
+                var codes = this.model.get('codes');
+                var svg = this.model.get('svg');
+                this.$droplabel.html(svg[codes.indexOf(selected_item)]); //.html(""+ selected_item + items[selected_item]);
 
+                if (this.model.get("mpl-type") == "cmap") {
+
+                }
                 var $replace_droplist = $('<ul />')
                     .addClass('dropdown-menu');
                 var that = this;
-                _.each(items, function(svg, key) {
+                _.each(codes, function(code, i) {
                     var item_button = $('<a href="#"/>')
-                        .html(svg) //.html(""+key+svg)
-                        .attr('key', key)
+                        .html(svg[i]) //.html(""+key+svg)
+                        .attr('key', code)
                         .on('click', $.proxy(that.handle_click, that));
-                    $replace_droplist.append($('<li />').append(item_button));
+                    $replace_droplist.append($('<li />').css('float', 'left').append(item_button));
                 });
 
                 this.$droplist.replaceWith($replace_droplist);
