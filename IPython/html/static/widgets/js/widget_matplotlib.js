@@ -46,19 +46,40 @@ define(["widgets/js/widget"], function(WidgetManager) {
                 var svg = this.model.get('svg');
                 this.$droplabel.html(svg[codes.indexOf(selected_item)]); //.html(""+ selected_item + items[selected_item]);
 
-                if (this.model.get("mpl-type") == "cmap") {
 
-                }
-                var $replace_droplist = $('<ul />')
-                    .addClass('dropdown-menu');
                 var that = this;
-                _.each(codes, function(code, i) {
-                    var item_button = $('<a href="#"/>')
-                        .html(svg[i]) //.html(""+key+svg)
-                        .attr('key', code)
-                        .on('click', $.proxy(that.handle_click, that));
-                    $replace_droplist.append($('<li />').css('float', 'left').append(item_button));
-                });
+                var tabs = this.model.get('tabs');
+                if (Object.keys(tabs).length > 0) {
+                    var $replace_droplist = $('<div>').addClass('dropdown-menu');
+                    var $droplist_tabs = $('<ul>');
+                    $replace_droplist.append($droplist_tabs);
+                    _.each(tabs, function(tabcodes, tab) {
+                        $droplist_tabs.append($('<li>').append($('<a href="#cmap-tab-'+tab+'">').text(tab)));
+                        var $droplist_tab_div = $('<div>').attr('id', 'cmap-tab-'+tab);
+                        var $droplist_tab_ul = $('<ul>').css('list-style-type', 'none').css('padding', 0);
+                        _.each(tabcodes, function(code, i) {
+                            var index = codes.indexOf(code);
+                            var item_button = $('<a href="#"/>')
+                                .html(svg[index])
+                                .attr('key', index)
+                                .on('click', $.proxy(that.handle_click, that));
+                            $droplist_tab_ul.append($('<li>').append(item_button));
+                        });
+                        $droplist_tab_div.append($droplist_tab_ul);
+                        $replace_droplist.append($droplist_tab_div);
+                    });
+                    $replace_droplist.tabs({event: 'mouseover'});
+                } else {
+                    var $replace_droplist = $('<ul />').addClass('dropdown-menu');
+                    _.each(codes, function(code, i) {
+                        var item_button = $('<a href="#"/>')
+                            .html(svg[i]) //.html(""+key+svg)
+                            .attr('key', i)
+                            .on('click', $.proxy(that.handle_click, that));
+                        $replace_droplist.append($('<li />').css('float', 'left').append(item_button));
+                        });
+                }
+
 
                 this.$droplist.replaceWith($replace_droplist);
                 this.$droplist.remove();
@@ -95,7 +116,9 @@ define(["widgets/js/widget"], function(WidgetManager) {
             // model to update.
             var obj = e.target;
             while (!$(obj).is("[key]")) obj = $(obj).parent();
-            this.model.set('value', $(obj).attr('key'), {updated_view: this});
+            var codes = this.model.get('codes');
+            var index = $(obj).attr('key');
+            this.model.set('value', codes[index], {updated_view: this});
             this.touch();
         },
 

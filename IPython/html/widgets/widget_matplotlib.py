@@ -12,7 +12,7 @@ from StringIO import StringIO
 from threading import Lock
 from IPython.utils.py3compat import unicode_type
 
-def _marker_to_svg(m, size=16, linewidth=2, color=(0,0,0)):
+def _marker_to_svg(m, size=12, linewidth=1.5, color=(0,0,0)):
     l = Line2D((size/2,), (size/2,), linestyle="None",
                marker=m,
                markersize=size/2, markeredgewidth=linewidth,
@@ -104,17 +104,19 @@ CMAP_SVG = lambda x: _CMAP_SVG[x] if x in _CMAP_SVG else _cmap_to_svg(x)
 _CMAP_REVERSED = {k: k.endswith("_r") for k in _CMAP_CODES}
 _CMAP_CLASS = {vv: k for k, v in _CLASS_CMAP.items() for vv in v}
 #print("unannotated cmaps", set(_CMAP_CODES) - set(_CMAP_CLASS.keys()))
+
 DEFAULT = {"marker": ".", "line": "-", "cmap": "YlGnBu"}
 
 class MPLSelectionWidget(DOMWidget):
     _view_name = Unicode('MPLDropdownView', sync=True)
     mpl_type = Enum([u'marker', u'line', u'cmap'], u'marker',
         help="MPL widget type", sync=True)
-    value = Unicode(help="Selected value", sync=True)
+    value = Any(help="Selected value", sync=True)
     codes = List(Any, sync=True)
     svg = List(Unicode, sync=True)
     disabled = Bool(False, help="Enable or disable user changes", sync=True)
     description = Unicode(help="Description of the value this widget represents", sync=True)
+    tabs = Dict(sync=True)
 
     def __init__(self, *args, **kwargs):
         if 'mpl_type' in kwargs:
@@ -132,4 +134,7 @@ class MPLSelectionWidget(DOMWidget):
         self.svg = [unicode_type(get_svg(c)) for c in self.codes]
         if 'value' not in kwargs:
             self.value = DEFAULT[self.mpl_type]
+        if self.mpl_type == 'cmap':
+            self.tabs = _CLASS_CMAP
+
         DOMWidget.__init__(self, *args, **kwargs)
