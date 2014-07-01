@@ -44,40 +44,53 @@ LINE_SVG = lambda x: _LINE_SVG[x] if x in _LINE_SVG else _linestyle_to_svg(x)
 def _cmap_to_svg(name, width=256, height=None):
     if height is None: height = width/32
 
-    rawdata = matplotlib.cm.datad[name]
-    colormap = matplotlib.cm.cmap_d[name]
-
-    if 'red' in rawdata:
-        if isinstance(rawdata['red'], (list, tuple)):
-            segpoints = set()
-            for cc in ('red', 'green', 'blue'):
-                for p in rawdata[cc]:
-                    segpoints.add(p[0])
-            xpos = sorted(segpoints)
-        else:
-            xpos = linspace(0, 1, 100)
-    else:
-        xpos = [p[0] for p in rawdata]
-
     store = StringIO()
     writer = XMLWriter(store)
     writer.start("svg", width='%ipt' % width, height='%ipt' % height,
-                 version='1.1', viewBox="0 0 %i %i" % (width, height))
-    writer.start("defs")
-    writer.start("linearGradient", id="cmap_%s" % name, x1="0%", y1="0%", x2="100%", y2="0%")
-    for i, pos in enumerate(xpos):
-        color = map(lambda x: int(x*255), colormap(pos))
-        red, green, blue, alpha = color
-        offset = int(pos * 100)
-        writer.start("stop", offset='%i%%' % offset,
-                     style="stop-color:rgb(%i,%i,%i);stop-opacity:1" % (red, green, blue))
-        writer.end() #stop
-    writer.end() #linearGradient
-    writer.end() #defs
-    writer.start("rect", width='%i'%width, height='%i'%height, fill="url(#cmap_%s)" % name)
+                 version='1.1', viewBox="0 0 %i %i" % (width, height),
+                 xmlns="http://www.w3.org/2000/svg")
+    writer.start("rect", width='%i'%width, height='%i'%height,
+                 fill="url(#cmap_gradient_%s)" % name)
     writer.end() #rect
     writer.end() #svg
     return store.getvalue()
+
+def _cmap_to_svg_defs(names):
+    store = StringIO()
+    writer = XMLWriter(store)
+    writer.start("svg", width=0, height=0, version="1.1",
+                 xmlns="http://www.w3.org/2000/svg")
+    writer.start("defs")
+    for name in names:
+        rawdata = matplotlib.cm.datad[name]
+        colormap = matplotlib.cm.cmap_d[name]
+
+        if 'red' in rawdata:
+            if isinstance(rawdata['red'], (list, tuple)):
+                segpoints = set()
+                for cc in ('red', 'green', 'blue'):
+                    for p in rawdata[cc]:
+                        segpoints.add(p[0])
+                xpos = sorted(segpoints)
+            else:
+                xpos = linspace(0, 1, 100)
+        else:
+            xpos = [p[0] for p in rawdata]
+
+        writer.start("linearGradient", id="cmap_gradient_%s" % name,
+                     x1="0%", y1="0%", x2="100%", y2="0%")
+        for i, pos in enumerate(xpos):
+            color = map(lambda x: int(x*255), colormap(pos))
+            red, green, blue, alpha = color
+            offset = int(pos * 100)
+            writer.start("stop", offset='%i%%' % offset,
+                         style="stop-color:rgb(%i,%i,%i);stop-opacity:1" % (red, green, blue))
+            writer.end() #stop
+        writer.end() #linearGradient
+    writer.end() #defs
+    writer.end() #svg
+    return store.getvalue()
+
 
 # from http://matplotlib.org/examples/color/colormaps_reference.html
 _CLASS_CMAP = {
@@ -99,6 +112,7 @@ _CLASS_CMAP = {
 
 
 _CMAP_CODES = [c for c in matplotlib.cm.datad.keys() if not c.endswith("_r")]
+_CMAP_DEFS = _cmap_to_svg_defs(_CMAP_CODES)
 _CMAP_SVG = {unicode_type(c): _cmap_to_svg(c) for c in _CMAP_CODES}
 CMAP_SVG = lambda x: _CMAP_SVG[x] if x in _CMAP_SVG else _cmap_to_svg(x)
 _CMAP_REVERSED = {k: k.endswith("_r") for k in _CMAP_CODES}
