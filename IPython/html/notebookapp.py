@@ -6,12 +6,14 @@
 
 from __future__ import print_function
 
+import base64
 import errno
 import io
 import json
 import logging
 import os
 import random
+import re
 import select
 import signal
 import socket
@@ -333,8 +335,34 @@ class NotebookApp(BaseIPythonApplication):
             self.file_to_run = base
             self.notebook_dir = path
 
-    # Network related information.
-
+    # Network related information
+    
+    allow_origin = Unicode('', config=True,
+        help="""Set the Access-Control-Allow-Origin header
+        
+        Use '*' to allow any origin to access your server.
+        
+        Takes precedence over allow_origin_pat.
+        """
+    )
+    
+    allow_origin_pat = Unicode('', config=True,
+        help="""Use a regular expression for the Access-Control-Allow-Origin header
+        
+        Requests from an origin matching the expression will get replies with:
+        
+            Access-Control-Allow-Origin: origin
+        
+        where `origin` is the origin of the request.
+        
+        Ignored if allow_origin is set.
+        """
+    )
+    
+    allow_credentials = Bool(False, config=True,
+        help="Set the Access-Control-Allow-Credentials: true header"
+    )
+    
     ip = Unicode('localhost', config=True,
         help="The IP address the notebook server will listen on."
     )
@@ -357,6 +385,14 @@ class NotebookApp(BaseIPythonApplication):
         help="""The full path to a private key file for usage with SSL/TLS."""
     )
     
+    cookie_secret_file = Unicode(config=True,
+        help="""The file where the cookie secret is stored."""
+    )
+    def _cookie_secret_file_default(self):
+        if self.profile_dir is None:
+            return ''
+        return os.path.join(self.profile_dir.security_dir, 'notebook_cookie_secret')
+    
     cookie_secret = Bytes(b'', config=True,
         help="""The random bytes used to secure cookies.
         By default this is a new random number every time you start the Notebook.
@@ -367,7 +403,26 @@ class NotebookApp(BaseIPythonApplication):
         """
     )
     def _cookie_secret_default(self):
-        return os.urandom(1024)
+        if os.path.exists(self.cookie_secret_file):
+            with io.open(self.cookie_secret_file, 'rb') as f:
+                return f.read()
+        else:
+            secret = base64.encodestring(os.urandom(1024))
+            self._write_cookie_secret_file(secret)
+            return secret
+    
+    def _write_cookie_secret_file(self, secret):
+        """write my secret to my secret_file"""
+        self.log.info("Writing notebook server cookie secret to %s", self.cookie_secret_file)
+        with io.open(self.cookie_secret_file, 'wb') as f:
+            f.write(secret)
+        try:
+            os.chmod(self.cookie_secret_file, 0o600)
+        except OSError:
+            self.log.warn(
+                "Could not set permissions on %s",
+                self.cookie_secret_file
+            )
 
     password = Unicode(u'', config=True,
                       help="""Hashed password to use for web authentication.
@@ -589,11 +644,8 @@ class NotebookApp(BaseIPythonApplication):
 
     def init_kernel_argv(self):
         """construct the kernel arguments"""
-        self.kernel_argv = []
-        # Kernel should inherit default config file from frontend
-        self.kernel_argv.append("--IPKernelApp.parent_appname='%s'" % self.name)
         # Kernel should get *absolute* path to profile directory
-        self.kernel_argv.extend(["--profile-dir", self.profile_dir.location])
+        self.kernel_argv = ["--profile-dir", self.profile_dir.location]
 
     def init_configurables(self):
         # force Session default to be secure
@@ -625,6 +677,11 @@ class NotebookApp(BaseIPythonApplication):
     
     def init_webapp(self):
         """initialize tornado webapp and httpserver"""
+        self.webapp_settings['allow_origin'] = self.allow_origin
+        if self.allow_origin_pat:
+            self.webapp_settings['allow_origin_pat'] = re.compile(self.allow_origin_pat)
+        self.webapp_settings['allow_credentials'] = self.allow_credentials
+        
         self.web_app = NotebookWebApplication(
             self, self.kernel_manager, self.notebook_manager, 
             self.cluster_manager, self.session_manager, self.kernel_spec_manager,
@@ -717,8 +774,6 @@ class NotebookApp(BaseIPythonApplication):
         
         This doesn't work on Windows.
         """
-        # FIXME: remove this delay when pyzmq dependency is >= 2.1.11
-        time.sleep(0.1)
         info = self.log.info
         info('interrupted')
         print(self.notebook_info())
