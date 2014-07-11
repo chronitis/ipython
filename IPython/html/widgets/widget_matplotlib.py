@@ -11,6 +11,7 @@ from matplotlib.backends.backend_svg import RendererSVG, XMLWriter
 from StringIO import StringIO
 from threading import Lock
 from IPython.utils.py3compat import unicode_type
+from IPython.core.display import display, SVG
 
 def _marker_to_svg(m, size=12, linewidth=1.5, color=(0,0,0)):
     l = Line2D((size/2,), (size/2,), linestyle="None",
@@ -46,7 +47,7 @@ def _cmap_to_svg(name, width=256, height=None):
 
     store = StringIO()
     writer = XMLWriter(store)
-    writer.start("svg", width='%ipt' % width, height='%ipt' % height,
+    writer.start("svg", width='%i' % width, height='%i' % height,
                  version='1.1', viewBox="0 0 %i %i" % (width, height),
                  xmlns="http://www.w3.org/2000/svg")
     writer.start("rect", width='%i'%width, height='%i'%height,
@@ -113,6 +114,7 @@ _CLASS_CMAP = {
 
 _CMAP_CODES = [c for c in matplotlib.cm.datad.keys() if not c.endswith("_r")]
 _CMAP_DEFS = _cmap_to_svg_defs(_CMAP_CODES)
+_CMAP_DEFS_SENT = False
 _CMAP_SVG = {unicode_type(c): _cmap_to_svg(c) for c in _CMAP_CODES}
 CMAP_SVG = lambda x: _CMAP_SVG[x] if x in _CMAP_SVG else _cmap_to_svg(x)
 _CMAP_REVERSED = {k: k.endswith("_r") for k in _CMAP_CODES}
@@ -133,6 +135,10 @@ class MPLSelectionWidget(DOMWidget):
     tabs = Dict(sync=True)
 
     def __init__(self, *args, **kwargs):
+        if not _CMAP_DEFS_SENT:
+            display(SVG(_CMAP_DEFS))
+            _CMAP_DEFS_SENT = True
+
         if 'mpl_type' in kwargs:
             self.mpl_type = kwargs.pop('mpl_type')
         get_svg = {'marker': MARKER_SVG,
