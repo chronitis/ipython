@@ -1,6 +1,8 @@
-define(["widgets/js/widget"], function(WidgetManager) {
+define(["widgets/js/widget",
+        "jqueryui",
+        "components/bootstrap/js/bootstrap.min"], function(widget, $) {
 
-    var MPLDropdownView = IPython.DOMWidgetView.extend({
+    var MPLDropdownView = widget.DOMWidgetView.extend({
         render : function(){
             // Called when view is rendered.
             this.$el
@@ -123,5 +125,8 @@ define(["widgets/js/widget"], function(WidgetManager) {
         },
 
     });
-    WidgetManager.register_widget_view('MPLDropdownView', MPLDropdownView);
+
+    return {
+        'MPLDropdownView': MPLDropdownView
+    };
 });
