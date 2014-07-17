@@ -59,7 +59,7 @@ def _cmap_to_svg(name, width=256, height=None):
 def _cmap_to_svg_defs(names):
     store = StringIO()
     writer = XMLWriter(store)
-    writer.start("svg", width=0, height=0, version="1.1",
+    writer.start("svg", width="0", height="0", version="1.1",
                  xmlns="http://www.w3.org/2000/svg")
     writer.start("defs")
     for name in names:
@@ -91,7 +91,6 @@ def _cmap_to_svg_defs(names):
     writer.end() #defs
     writer.end() #svg
     return store.getvalue()
-
 
 # from http://matplotlib.org/examples/color/colormaps_reference.html
 _CLASS_CMAP = {
@@ -135,6 +134,7 @@ class MPLSelectionWidget(DOMWidget):
     tabs = Dict(sync=True)
 
     def __init__(self, *args, **kwargs):
+        global _CMAP_DEFS_SENT
         if not _CMAP_DEFS_SENT:
             display(SVG(_CMAP_DEFS))
             _CMAP_DEFS_SENT = True
