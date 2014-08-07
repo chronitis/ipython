@@ -1,6 +1,8 @@
-define(["widgets/js/widget",
-        "jqueryui",
-        "components/bootstrap/js/bootstrap.min"], function(widget, $) {
+define([
+    "widgets/js/widget",
+    "jqueryui",
+    "bootstrap",
+], function(widget, $){
 
     var MPLDropdownView = widget.DOMWidgetView.extend({
         render : function(){
