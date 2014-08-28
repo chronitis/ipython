@@ -19,6 +19,7 @@ try:  # Python >= 3.3
 except ImportError:
     from IPython.utils.signatures import signature, Parameter
 from inspect import getcallargs
+from threading import Timer
 
 from IPython.core.getipython import get_ipython
 from IPython.html.widgets import (Widget, Text,
@@ -175,10 +176,13 @@ def interactive(__interact_f, **kwargs):
     """Build a group of widgets to interact with a function."""
     f = __interact_f
     co = kwargs.pop('clear_output', True)
+    slow = kwargs.pop('__slow', False)
+    delay = kwargs.pop('__delay', 1.0)
     kwargs_widgets = []
     container = Box()
     container.result = None
     container.args = []
+    container.epoch = 0
     container.kwargs = dict()
     kwargs = kwargs.copy()
 
@@ -213,9 +217,24 @@ def interactive(__interact_f, **kwargs):
             else:
                 ip.showtraceback()
 
+    # callback for the slow case
+    # triggers a timer which checks if the epoch is the same
+    # when it returns, and if so, runs call_f
+    def slow_f(name, old, new):
+        container.epoch += 1
+        def closure(old_epoch):
+            def inner():
+                if container.epoch == old_epoch:
+                    call_f(None, None, None)
+            return inner
+        Timer(delay, closure(container.epoch)).start()
+
     # Wire up the widgets
     for widget in kwargs_widgets:
-        widget.on_trait_change(call_f, 'value')
+        if slow:
+            widget.on_trait_change(slow_f, 'value')
+        else:
+            widget.on_trait_change(call_f, 'value')
 
     container.on_displayed(lambda _: call_f(None, None, None))
 
@@ -248,6 +267,17 @@ def interact(__interact_f=None, **kwargs):
             display(w)
             return f
         return dec
+
+def interact_slow(__interact_f=None, **kwargs):
+    """interact_slow
+
+    Like `interact()`, but waits until new input stops before running
+    the function (eg, when dragging a slider, only the last value is
+    plotted. This is good for long-running functions.
+
+    The default delay is 1 second after last input, but you can override
+    this by passing the kwarg "__delay""""
+    return interact(__interact_f, __slow=True, **kwargs)
 
 class fixed(HasTraits):
     """A pseudo-widget whose value is fixed and never synced to the client."""
